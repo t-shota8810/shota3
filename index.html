@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Shooting Game</title>
+<title>Space Shooting</title>
 
 <style>
 
@@ -11,7 +11,6 @@ margin:0;
 background:black;
 overflow:hidden;
 font-family:sans-serif;
-text-align:center;
 }
 
 #game{
@@ -25,7 +24,7 @@ position:absolute;
 top:10px;
 left:10px;
 color:white;
-font-size:20px;
+font-size:18px;
 }
 
 #retry{
@@ -34,7 +33,7 @@ top:50%;
 left:50%;
 transform:translate(-50%,-50%);
 padding:15px 40px;
-font-size:20px;
+font-size:22px;
 display:none;
 cursor:pointer;
 }
@@ -45,8 +44,9 @@ cursor:pointer;
 <body>
 
 <div id="ui">
-SCORE : <span id="score">0</span><br>
-LIFE : <span id="life">3</span>
+SCORE: <span id="score">0</span><br>
+LIFE: <span id="life">3</span><br>
+HI-SCORE: <span id="hiscore">0</span>
 </div>
 
 <button id="retry">RETRY</button>
@@ -65,18 +65,14 @@ let keys={}
 document.addEventListener("keydown",e=>keys[e.key]=true)
 document.addEventListener("keyup",e=>keys[e.key]=false)
 
-const retryBtn=document.getElementById("retry")
+let hiscore=localStorage.getItem("shooting_hiscore")||0
+document.getElementById("hiscore").textContent=hiscore
 
+const retryBtn=document.getElementById("retry")
 retryBtn.onclick=resetGame
 
-let player
-let bullets
-let enemies
-let explosions
-let items
-let score
-let life
-let gameover
+let player,bullets,enemies,enemyBullets,explosions,items,stars
+let score,life,gameover,boss
 
 function resetGame(){
 
@@ -85,20 +81,32 @@ x:WIDTH/2,
 y:HEIGHT-60,
 speed:6,
 power:1,
-powerTimer:0
+shield:false
 }
 
 bullets=[]
+enemyBullets=[]
 enemies=[]
 explosions=[]
 items=[]
+
+boss=null
 
 score=0
 life=3
 gameover=false
 
+stars=[]
+for(let i=0;i<100;i++){
+stars.push({
+x:Math.random()*WIDTH,
+y:Math.random()*HEIGHT,
+s:Math.random()*2+1
+})
+}
+
 document.getElementById("score").textContent=0
-document.getElementById("life").textContent=3
+document.getElementById("life").textContent=life
 
 retryBtn.style.display="none"
 
@@ -106,23 +114,20 @@ retryBtn.style.display="none"
 
 resetGame()
 
-//敵生成
-
 function spawnEnemy(){
 
-if(gameover)return
+if(gameover||boss)return
 
 enemies.push({
 x:Math.random()*WIDTH,
 y:-20,
-speed:2+Math.random()*2
+speed:2+Math.random()*2,
+cool:Math.random()*120
 })
 
 }
 
-setInterval(spawnEnemy,1000)
-
-//発射
+setInterval(spawnEnemy,900)
 
 function shoot(){
 
@@ -140,26 +145,42 @@ bullets.push({x:player.x,y:player.y,vx:2})
 
 }
 
+if(player.power==3){
+
+bullets.push({x:player.x,y:player.y,vx:0,laser:true})
+
 }
 
-//爆発
+}
 
 function createExplosion(x,y){
 
-explosions.push({
-x:x,
-y:y,
-r:5,
-life:20
-})
+explosions.push({x:x,y:y,r:5,life:25})
 
 }
 
-//更新
+function spawnBoss(){
+
+boss={
+x:WIDTH/2,
+y:100,
+hp:100,
+dir:2
+}
+
+}
 
 function update(){
 
 if(gameover)return
+
+if(score>500&&!boss){
+
+spawnBoss()
+
+}
+
+//移動
 
 if(keys["ArrowLeft"]) player.x-=player.speed
 if(keys["ArrowRight"]) player.x+=player.speed
@@ -167,11 +188,26 @@ if(keys["ArrowRight"]) player.x+=player.speed
 if(player.x<10)player.x=10
 if(player.x>WIDTH-10)player.x=WIDTH-10
 
+//星
+
+for(let s of stars){
+
+s.y+=s.s
+
+if(s.y>HEIGHT){
+
+s.y=0
+s.x=Math.random()*WIDTH
+
+}
+
+}
+
 //弾
 
 for(let b of bullets){
 
-b.y-=8
+b.y-=10
 b.x+=b.vx
 
 }
@@ -184,10 +220,109 @@ for(let e of enemies){
 
 e.y+=e.speed
 
-if(Math.abs(e.x-player.x)<20 && Math.abs(e.y-player.y)<20){
+e.cool--
 
-gameover=true
-retryBtn.style.display="block"
+if(e.cool<0){
+
+enemyBullets.push({x:e.x,y:e.y})
+e.cool=120
+
+}
+
+if(Math.abs(e.x-player.x)<20&&Math.abs(e.y-player.y)<20){
+
+hitPlayer()
+
+}
+
+}
+
+//敵弾
+
+for(let b of enemyBullets){
+
+b.y+=5
+
+if(Math.abs(b.x-player.x)<15&&Math.abs(b.y-player.y)<15){
+
+hitPlayer()
+
+}
+
+}
+
+enemyBullets=enemyBullets.filter(b=>b.y<HEIGHT)
+
+//ボス
+
+if(boss){
+
+boss.x+=boss.dir
+
+if(boss.x<50||boss.x>WIDTH-50){
+
+boss.dir*=-1
+
+}
+
+}
+
+//衝突
+
+for(let i=enemies.length-1;i>=0;i--){
+
+for(let j=bullets.length-1;j>=0;j--){
+
+let e=enemies[i]
+let b=bullets[j]
+
+if(Math.abs(e.x-b.x)<15&&Math.abs(e.y-b.y)<15){
+
+createExplosion(e.x,e.y)
+
+if(Math.random()<0.3){
+
+items.push({x:e.x,y:e.y,type:Math.floor(Math.random()*3)})
+
+}
+
+enemies.splice(i,1)
+bullets.splice(j,1)
+
+score+=10
+document.getElementById("score").textContent=score
+
+break
+
+}
+
+}
+
+}
+
+//ボス被弾
+
+if(boss){
+
+for(let b of bullets){
+
+if(Math.abs(b.x-boss.x)<50&&Math.abs(b.y-boss.y)<40){
+
+boss.hp--
+
+createExplosion(b.x,b.y)
+
+}
+
+}
+
+if(boss.hp<=0){
+
+createExplosion(boss.x,boss.y)
+
+boss=null
+
+score+=500
 
 }
 
@@ -210,75 +345,66 @@ for(let it of items){
 
 it.y+=3
 
-if(Math.abs(it.x-player.x)<20 && Math.abs(it.y-player.y)<20){
+if(Math.abs(it.x-player.x)<20&&Math.abs(it.y-player.y)<20){
 
-player.power=2
-player.powerTimer=600
+if(it.type==0) player.power=2
+if(it.type==1) player.power=3
+if(it.type==2) player.shield=true
+
 it.dead=true
 
 }
 
 }
 
-items=items.filter(i=>!i.dead && i.y<HEIGHT+20)
-
-//パワー時間
-
-if(player.powerTimer>0){
-
-player.powerTimer--
-
-if(player.powerTimer==0){
-
-player.power=1
+items=items.filter(i=>!i.dead&&i.y<HEIGHT)
 
 }
 
-}
+function hitPlayer(){
 
-//衝突
+if(player.shield){
 
-for(let i=enemies.length-1;i>=0;i--){
-
-for(let j=bullets.length-1;j>=0;j--){
-
-let e=enemies[i]
-let b=bullets[j]
-
-if(Math.abs(e.x-b.x)<15 && Math.abs(e.y-b.y)<15){
-
-createExplosion(e.x,e.y)
-
-if(Math.random()<0.2){
-
-items.push({x:e.x,y:e.y})
+player.shield=false
+return
 
 }
 
-enemies.splice(i,1)
-bullets.splice(j,1)
+life--
 
-score+=10
-document.getElementById("score").textContent=score
+document.getElementById("life").textContent=life
 
-break
+if(life<=0){
+
+gameover=true
+retryBtn.style.display="block"
+
+if(score>hiscore){
+
+localStorage.setItem("shooting_hiscore",score)
 
 }
 
 }
 
 }
-
-}
-
-//描画
 
 function draw(){
 
 ctx.fillStyle="black"
 ctx.fillRect(0,0,WIDTH,HEIGHT)
 
-//プレイヤー（宇宙船）
+//星
+
+ctx.fillStyle="white"
+
+for(let s of stars){
+
+ctx.fillRect(s.x,s.y,s.s,s.s)
+
+}
+
+//プレイヤー
 
 ctx.fillStyle="cyan"
 
@@ -286,8 +412,16 @@ ctx.beginPath()
 ctx.moveTo(player.x,player.y-20)
 ctx.lineTo(player.x-15,player.y+20)
 ctx.lineTo(player.x+15,player.y+20)
-ctx.closePath()
 ctx.fill()
+
+if(player.shield){
+
+ctx.strokeStyle="blue"
+ctx.beginPath()
+ctx.arc(player.x,player.y,30,0,Math.PI*2)
+ctx.stroke()
+
+}
 
 //弾
 
@@ -295,26 +429,49 @@ ctx.fillStyle="yellow"
 
 for(let b of bullets){
 
+if(b.laser){
+
+ctx.fillRect(b.x-2,0,4,b.y)
+
+}else{
+
 ctx.fillRect(b.x-2,b.y-10,4,10)
 
 }
 
-//敵（六角形）
+}
+
+//敵
 
 ctx.fillStyle="red"
 
 for(let e of enemies){
 
+ctx.fillRect(e.x-12,e.y-12,24,24)
+
+}
+
+//敵弾
+
+ctx.fillStyle="orange"
+
+for(let b of enemyBullets){
+
 ctx.beginPath()
-
-ctx.moveTo(e.x,e.y-15)
-ctx.lineTo(e.x-15,e.y)
-ctx.lineTo(e.x-10,e.y+15)
-ctx.lineTo(e.x+10,e.y+15)
-ctx.lineTo(e.x+15,e.y)
-ctx.closePath()
-
+ctx.arc(b.x,b.y,4,0,Math.PI*2)
 ctx.fill()
+
+}
+
+//ボス
+
+if(boss){
+
+ctx.fillStyle="purple"
+ctx.fillRect(boss.x-50,boss.y-30,100,60)
+
+ctx.fillStyle="white"
+ctx.fillRect(boss.x-50,boss.y-50,boss.hp,8)
 
 }
 
@@ -336,33 +493,21 @@ ctx.fill()
 
 }
 
-//アイテム（星）
-
-ctx.fillStyle="lime"
+//アイテム
 
 for(let it of items){
 
+if(it.type==0) ctx.fillStyle="lime"
+if(it.type==1) ctx.fillStyle="cyan"
+if(it.type==2) ctx.fillStyle="blue"
+
 ctx.beginPath()
-
-for(let i=0;i<5;i++){
-
-let angle=i*2*Math.PI/5
-
-ctx.lineTo(
-it.x+Math.cos(angle)*10,
-it.y+Math.sin(angle)*10
-)
-
-}
-
-ctx.closePath()
+ctx.arc(it.x,it.y,8,0,Math.PI*2)
 ctx.fill()
 
 }
 
 }
-
-//連射
 
 let shootTimer=0
 
@@ -373,7 +518,7 @@ draw()
 
 shootTimer++
 
-if(keys[" "] && shootTimer>10){
+if(keys[" "]&&shootTimer>10){
 
 shoot()
 shootTimer=0

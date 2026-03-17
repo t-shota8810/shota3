@@ -2,13 +2,13 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Race Game</title>
+<title>Shooting Game</title>
 
 <style>
 
 body{
 margin:0;
-background:#222;
+background:black;
 overflow:hidden;
 font-family:sans-serif;
 }
@@ -16,7 +16,7 @@ font-family:sans-serif;
 #game{
 display:block;
 margin:auto;
-background:#3aa655;
+background:black;
 }
 
 #ui{
@@ -25,9 +25,6 @@ top:10px;
 left:10px;
 color:white;
 font-size:20px;
-background:rgba(0,0,0,0.5);
-padding:8px 12px;
-border-radius:10px;
 }
 
 </style>
@@ -36,306 +33,336 @@ border-radius:10px;
 <body>
 
 <div id="ui">
-TIME : <span id="time">0.00</span>
+SCORE : <span id="score">0</span>
+<br>
+LIFE : <span id="life">3</span>
 </div>
 
 <canvas id="game" width="400" height="600"></canvas>
 
 <script>
 
-const canvas = document.getElementById("game")
-const ctx = canvas.getContext("2d")
+const canvas=document.getElementById("game")
+const ctx=canvas.getContext("2d")
 
-const WIDTH = canvas.width
-const HEIGHT = canvas.height
+const WIDTH=canvas.width
+const HEIGHT=canvas.height
 
 let keys={}
 
 document.addEventListener("keydown",e=>keys[e.key]=true)
 document.addEventListener("keyup",e=>keys[e.key]=false)
 
-let startTime=Date.now()
-let finished=false
+let score=0
+let life=3
+let gameover=false
 
-let trackOffset=0
+//================
+// プレイヤー
+//================
 
-const trackLength=6000
-
-//=================
-// コース設定
-//=================
-
-const course=[
-{length:800,curve:0},
-{length:700,curve:0.7},
-{length:700,curve:-0.6},
-{length:600,curve:0},
-{length:600,curve:-0.8},
-{length:700,curve:0.9},
-{length:800,curve:0},
-{length:600,curve:-1},
-{length:1000,curve:0}
-]
-
-//=================
-// 車
-//=================
-
-let car={
+let player={
 x:WIDTH/2,
-y:HEIGHT-120,
-speed:0,
-angle:0
+y:HEIGHT-60,
+speed:6,
+power:1,
+powerTimer:0
 }
 
-//=================
-// 敵車
-//=================
+//================
+// 弾
+//================
+
+let bullets=[]
+
+//================
+// 敵
+//================
 
 let enemies=[]
 
-for(let i=0;i<6;i++){
+//================
+// 爆発
+//================
+
+let explosions=[]
+
+//================
+// アイテム
+//================
+
+let items=[]
+
+//================
+// 敵生成
+//================
+
+function spawnEnemy(){
 
 enemies.push({
-
-x:Math.random()*200+100,
-y:-i*800-600,
-speed:4+Math.random()*2
-
-})
-
-}
-
-//=================
-// 木
-//=================
-
-let trees=[]
-
-for(let i=0;i<80;i++){
-
-trees.push({
-
 x:Math.random()*WIDTH,
-y:Math.random()*trackLength
-
+y:-20,
+speed:2+Math.random()*2
 })
 
 }
 
-//=================
-// カーブ取得
-//=================
+setInterval(spawnEnemy,1000)
 
-function getCurve(offset){
+//================
+// 発射
+//================
 
-let total=0
+function shoot(){
 
-for(let seg of course){
+if(player.power==1){
 
-total+=seg.length
+bullets.push({x:player.x,y:player.y,vx:0})
 
-if(offset<total){
-return seg.curve
+}
+
+if(player.power==2){
+
+bullets.push({x:player.x,y:player.y,vx:-2})
+bullets.push({x:player.x,y:player.y,vx:0})
+bullets.push({x:player.x,y:player.y,vx:2})
+
 }
 
 }
 
-return 0
+//================
+// 爆発生成
+//================
+
+function createExplosion(x,y){
+
+explosions.push({
+x:x,
+y:y,
+r:5,
+life:20
+})
 
 }
 
-//=================
+//================
 // 更新
-//=================
+//================
 
 function update(){
 
-if(finished)return
+if(gameover)return
 
-if(keys["ArrowUp"])car.speed+=0.2
-if(keys["ArrowDown"])car.speed-=0.2
+//移動
 
-car.speed*=0.98
+if(keys["ArrowLeft"]) player.x-=player.speed
+if(keys["ArrowRight"]) player.x+=player.speed
 
-if(keys["ArrowLeft"])car.angle-=0.04
-if(keys["ArrowRight"])car.angle+=0.04
+if(player.x<10)player.x=10
+if(player.x>WIDTH-10)player.x=WIDTH-10
 
-if(car.speed>10)car.speed=10
-if(car.speed<-4)car.speed=-4
+//弾
 
-let curve=getCurve(trackOffset)
+for(let b of bullets){
 
-car.x+=Math.sin(car.angle)*car.speed
-car.x-=curve*car.speed*2
-
-trackOffset+=Math.cos(car.angle)*car.speed
-
-if(car.x<40||car.x>WIDTH-40){
-
-car.speed*=0.9
+b.y-=8
+b.x+=b.vx
 
 }
+
+bullets=bullets.filter(b=>b.y>-20)
+
+//敵
 
 for(let e of enemies){
 
-e.y+=car.speed-e.speed
-
-if(e.y>HEIGHT+100){
-
-e.y=-Math.random()*2000
-e.x=Math.random()*200+100
+e.y+=e.speed
 
 }
 
-if(Math.abs(e.y-car.y)<40&&Math.abs(e.x-car.x)<30){
+//爆発
 
-car.speed*=0.5
+for(let ex of explosions){
+
+ex.r+=2
+ex.life--
+
+}
+
+explosions=explosions.filter(e=>e.life>0)
+
+//アイテム
+
+for(let it of items){
+
+it.y+=3
+
+if(Math.abs(it.x-player.x)<20 && Math.abs(it.y-player.y)<20){
+
+player.power=2
+player.powerTimer=600
+
+it.dead=true
 
 }
 
 }
 
-if(trackOffset>trackLength){
+items=items.filter(i=>!i.dead && i.y<HEIGHT+20)
 
-finished=true
-alert("GOAL! TIME : "+document.getElementById("time").textContent+" 秒")
+//パワー時間
+
+if(player.powerTimer>0){
+
+player.powerTimer--
+
+if(player.powerTimer==0){
+
+player.power=1
 
 }
 
 }
 
-//=================
-// 道路描画
-//=================
+//敵削除
 
-function drawTrack(){
+for(let i=enemies.length-1;i>=0;i--){
 
-ctx.fillStyle="#3aa655"
+let e=enemies[i]
+
+if(e.y>HEIGHT){
+
+enemies.splice(i,1)
+
+life--
+
+document.getElementById("life").textContent=life
+
+if(life<=0){
+
+gameover=true
+alert("GAME OVER")
+
+}
+
+}
+
+}
+
+//衝突判定
+
+for(let i=enemies.length-1;i>=0;i--){
+
+for(let j=bullets.length-1;j>=0;j--){
+
+let e=enemies[i]
+let b=bullets[j]
+
+if(Math.abs(e.x-b.x)<15 && Math.abs(e.y-b.y)<15){
+
+createExplosion(e.x,e.y)
+
+if(Math.random()<0.2){
+
+items.push({x:e.x,y:e.y})
+
+}
+
+enemies.splice(i,1)
+bullets.splice(j,1)
+
+score+=10
+document.getElementById("score").textContent=score
+
+break
+
+}
+
+}
+
+}
+
+}
+
+//================
+// 描画
+//================
+
+function draw(){
+
+ctx.fillStyle="black"
 ctx.fillRect(0,0,WIDTH,HEIGHT)
 
-let curve=getCurve(trackOffset)
+//プレイヤー
 
-let shift=curve*200
+ctx.fillStyle="cyan"
+ctx.fillRect(player.x-15,player.y-15,30,30)
 
-ctx.fillStyle="#555"
-ctx.fillRect(60+shift,0,WIDTH-120,HEIGHT)
+//弾
 
-ctx.strokeStyle="white"
-ctx.lineWidth=4
+ctx.fillStyle="yellow"
 
-for(let i=-40;i<HEIGHT;i+=40){
+for(let b of bullets){
 
-ctx.beginPath()
-
-ctx.moveTo(WIDTH/2+shift,i+(trackOffset%40))
-ctx.lineTo(WIDTH/2+shift,i+20+(trackOffset%40))
-
-ctx.stroke()
+ctx.fillRect(b.x-3,b.y-10,6,10)
 
 }
 
+//敵
+
+ctx.fillStyle="red"
+
+for(let e of enemies){
+
+ctx.fillRect(e.x-15,e.y-15,30,30)
+
 }
 
-//=================
-// 木
-//=================
+//爆発
 
-function drawTrees(){
-
-ctx.fillStyle="green"
-
-for(let t of trees){
-
-let y=t.y-trackOffset
-
-if(y>-50&&y<HEIGHT+50){
+for(let ex of explosions){
 
 ctx.beginPath()
+ctx.arc(ex.x,ex.y,ex.r,0,Math.PI*2)
+ctx.fillStyle="orange"
+ctx.fill()
 
-ctx.arc(t.x,y,10,0,Math.PI*2)
+}
 
+//アイテム
+
+ctx.fillStyle="lime"
+
+for(let it of items){
+
+ctx.beginPath()
+ctx.arc(it.x,it.y,8,0,Math.PI*2)
 ctx.fill()
 
 }
 
 }
 
-}
+//================
+// 連射制御
+//================
 
-//=================
-// 敵車
-//=================
-
-function drawEnemies(){
-
-for(let e of enemies){
-
-ctx.fillStyle="blue"
-
-ctx.fillRect(e.x-10,e.y-20,20,40)
-
-}
-
-}
-
-//=================
-// 自車
-//=================
-
-function drawCar(){
-
-ctx.save()
-
-ctx.translate(car.x,car.y)
-ctx.rotate(car.angle)
-
-ctx.fillStyle="red"
-ctx.fillRect(-12,-20,24,40)
-
-ctx.fillStyle="black"
-ctx.fillRect(-12,-20,24,8)
-
-ctx.restore()
-
-}
-
-//=================
-// 描画
-//=================
-
-function draw(){
-
-drawTrack()
-drawTrees()
-drawEnemies()
-drawCar()
-
-}
-
-//=================
-// タイマー
-//=================
-
-function updateTimer(){
-
-if(finished)return
-
-let t=(Date.now()-startTime)/1000
-
-document.getElementById("time").textContent=t.toFixed(2)
-
-}
-
-//=================
-// ループ
-//=================
+let shootTimer=0
 
 function gameLoop(){
 
 update()
 draw()
-updateTimer()
+
+shootTimer++
+
+if(keys[" "] && shootTimer>10){
+
+shoot()
+shootTimer=0
+
+}
 
 requestAnimationFrame(gameLoop)
 

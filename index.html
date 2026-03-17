@@ -2,154 +2,346 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Top View Race Game</title>
+<title>Race Game</title>
+
 <style>
+
 body{
-    margin:0;
-    background:#222;
-    overflow:hidden;
-    font-family:sans-serif;
+margin:0;
+background:#222;
+overflow:hidden;
+font-family:sans-serif;
 }
 
 #game{
-    display:block;
-    margin:auto;
-    background:#3aa655;
+display:block;
+margin:auto;
+background:#3aa655;
 }
 
 #ui{
-    position:absolute;
-    top:10px;
-    left:10px;
-    color:white;
-    font-size:20px;
-    background:rgba(0,0,0,0.5);
-    padding:5px 10px;
-    border-radius:8px;
+position:absolute;
+top:10px;
+left:10px;
+color:white;
+font-size:20px;
+background:rgba(0,0,0,0.5);
+padding:8px 12px;
+border-radius:10px;
 }
+
 </style>
 </head>
 
 <body>
 
-<div id="ui">TIME: <span id="time">0.00</span></div>
+<div id="ui">
+TIME : <span id="time">0.00</span>
+</div>
+
 <canvas id="game" width="400" height="600"></canvas>
 
 <script>
 
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const canvas = document.getElementById("game")
+const ctx = canvas.getContext("2d")
 
-const WIDTH = canvas.width;
-const HEIGHT = canvas.height;
+const WIDTH = canvas.width
+const HEIGHT = canvas.height
 
-let keys = {};
+let keys={}
 
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
+document.addEventListener("keydown",e=>keys[e.key]=true)
+document.addEventListener("keyup",e=>keys[e.key]=false)
 
-let car = {
-    x: WIDTH/2,
-    y: HEIGHT-120,
-    speed:0,
-    angle:0
-};
+let startTime=Date.now()
+let finished=false
 
-let trackOffset = 0;
+let trackOffset=0
 
-let startTime = Date.now();
-let finished = false;
+const trackLength=6000
 
-const trackLength = 5000;
+//=================
+// コース設定
+//=================
+
+const course=[
+{length:800,curve:0},
+{length:700,curve:0.7},
+{length:700,curve:-0.6},
+{length:600,curve:0},
+{length:600,curve:-0.8},
+{length:700,curve:0.9},
+{length:800,curve:0},
+{length:600,curve:-1},
+{length:1000,curve:0}
+]
+
+//=================
+// 車
+//=================
+
+let car={
+x:WIDTH/2,
+y:HEIGHT-120,
+speed:0,
+angle:0
+}
+
+//=================
+// 敵車
+//=================
+
+let enemies=[]
+
+for(let i=0;i<6;i++){
+
+enemies.push({
+
+x:Math.random()*200+100,
+y:-i*800-600,
+speed:4+Math.random()*2
+
+})
+
+}
+
+//=================
+// 木
+//=================
+
+let trees=[]
+
+for(let i=0;i<80;i++){
+
+trees.push({
+
+x:Math.random()*WIDTH,
+y:Math.random()*trackLength
+
+})
+
+}
+
+//=================
+// カーブ取得
+//=================
+
+function getCurve(offset){
+
+let total=0
+
+for(let seg of course){
+
+total+=seg.length
+
+if(offset<total){
+return seg.curve
+}
+
+}
+
+return 0
+
+}
+
+//=================
+// 更新
+//=================
 
 function update(){
 
-    if(finished) return;
+if(finished)return
 
-    if(keys["ArrowUp"]) car.speed += 0.2;
-    if(keys["ArrowDown"]) car.speed -= 0.2;
+if(keys["ArrowUp"])car.speed+=0.2
+if(keys["ArrowDown"])car.speed-=0.2
 
-    car.speed *= 0.98;
+car.speed*=0.98
 
-    if(keys["ArrowLeft"]) car.angle -= 0.05 * car.speed;
-    if(keys["ArrowRight"]) car.angle += 0.05 * car.speed;
+if(keys["ArrowLeft"])car.angle-=0.04
+if(keys["ArrowRight"])car.angle+=0.04
 
-    if(car.speed > 8) car.speed = 8;
-    if(car.speed < -4) car.speed = -4;
+if(car.speed>10)car.speed=10
+if(car.speed<-4)car.speed=-4
 
-    car.x += Math.sin(car.angle) * car.speed;
-    trackOffset += Math.cos(car.angle) * car.speed;
+let curve=getCurve(trackOffset)
 
-    if(car.x < 60) car.x = 60;
-    if(car.x > WIDTH-60) car.x = WIDTH-60;
+car.x+=Math.sin(car.angle)*car.speed
+car.x-=curve*car.speed*2
 
-    if(trackOffset > trackLength){
-        finished = true;
-        alert("GOAL! TIME: " + document.getElementById("time").textContent + " 秒");
-    }
+trackOffset+=Math.cos(car.angle)*car.speed
+
+if(car.x<40||car.x>WIDTH-40){
+
+car.speed*=0.9
 
 }
+
+for(let e of enemies){
+
+e.y+=car.speed-e.speed
+
+if(e.y>HEIGHT+100){
+
+e.y=-Math.random()*2000
+e.x=Math.random()*200+100
+
+}
+
+if(Math.abs(e.y-car.y)<40&&Math.abs(e.x-car.x)<30){
+
+car.speed*=0.5
+
+}
+
+}
+
+if(trackOffset>trackLength){
+
+finished=true
+alert("GOAL! TIME : "+document.getElementById("time").textContent+" 秒")
+
+}
+
+}
+
+//=================
+// 道路描画
+//=================
 
 function drawTrack(){
 
-    ctx.fillStyle="#3aa655";
-    ctx.fillRect(0,0,WIDTH,HEIGHT);
+ctx.fillStyle="#3aa655"
+ctx.fillRect(0,0,WIDTH,HEIGHT)
 
-    ctx.fillStyle="#555";
-    ctx.fillRect(60,0,WIDTH-120,HEIGHT);
+let curve=getCurve(trackOffset)
 
-    ctx.strokeStyle="white";
-    ctx.lineWidth=4;
+let shift=curve*200
 
-    for(let i=-20;i<HEIGHT;i+=40){
-        ctx.beginPath();
-        ctx.moveTo(WIDTH/2,i + (trackOffset % 40));
-        ctx.lineTo(WIDTH/2,i+20 + (trackOffset % 40));
-        ctx.stroke();
-    }
+ctx.fillStyle="#555"
+ctx.fillRect(60+shift,0,WIDTH-120,HEIGHT)
+
+ctx.strokeStyle="white"
+ctx.lineWidth=4
+
+for(let i=-40;i<HEIGHT;i+=40){
+
+ctx.beginPath()
+
+ctx.moveTo(WIDTH/2+shift,i+(trackOffset%40))
+ctx.lineTo(WIDTH/2+shift,i+20+(trackOffset%40))
+
+ctx.stroke()
 
 }
+
+}
+
+//=================
+// 木
+//=================
+
+function drawTrees(){
+
+ctx.fillStyle="green"
+
+for(let t of trees){
+
+let y=t.y-trackOffset
+
+if(y>-50&&y<HEIGHT+50){
+
+ctx.beginPath()
+
+ctx.arc(t.x,y,10,0,Math.PI*2)
+
+ctx.fill()
+
+}
+
+}
+
+}
+
+//=================
+// 敵車
+//=================
+
+function drawEnemies(){
+
+for(let e of enemies){
+
+ctx.fillStyle="blue"
+
+ctx.fillRect(e.x-10,e.y-20,20,40)
+
+}
+
+}
+
+//=================
+// 自車
+//=================
 
 function drawCar(){
 
-    ctx.save();
+ctx.save()
 
-    ctx.translate(car.x,car.y);
-    ctx.rotate(car.angle);
+ctx.translate(car.x,car.y)
+ctx.rotate(car.angle)
 
-    ctx.fillStyle="red";
-    ctx.fillRect(-10,-20,20,40);
+ctx.fillStyle="red"
+ctx.fillRect(-12,-20,24,40)
 
-    ctx.fillStyle="black";
-    ctx.fillRect(-10,-20,20,8);
+ctx.fillStyle="black"
+ctx.fillRect(-12,-20,24,8)
 
-    ctx.restore();
+ctx.restore()
+
 }
+
+//=================
+// 描画
+//=================
 
 function draw(){
 
-    drawTrack();
-    drawCar();
+drawTrack()
+drawTrees()
+drawEnemies()
+drawCar()
+
 }
+
+//=================
+// タイマー
+//=================
 
 function updateTimer(){
 
-    if(finished) return;
+if(finished)return
 
-    let t = (Date.now() - startTime)/1000;
-    document.getElementById("time").textContent = t.toFixed(2);
+let t=(Date.now()-startTime)/1000
+
+document.getElementById("time").textContent=t.toFixed(2)
+
 }
+
+//=================
+// ループ
+//=================
 
 function gameLoop(){
 
-    update();
-    draw();
-    updateTimer();
+update()
+draw()
+updateTimer()
 
-    requestAnimationFrame(gameLoop);
+requestAnimationFrame(gameLoop)
+
 }
 
-gameLoop();
+gameLoop()
 
 </script>
 </body>

@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Space Shooter Ultimate</title>
+<title>Space Shooter</title>
 
 <style>
 
@@ -49,22 +49,6 @@ transform:translate(-50%,-50%);
 display:none;
 }
 
-#mobile{
-position:absolute;
-bottom:20px;
-width:100%;
-display:flex;
-justify-content:center;
-gap:40px;
-}
-
-.mobileBtn{
-width:70px;
-height:70px;
-font-size:30px;
-opacity:0.6;
-}
-
 </style>
 </head>
 
@@ -81,15 +65,9 @@ HI <span id="hiscore">0</span>
 <button onclick="startGame()">START</button>
 </div>
 
-<button id="retry" onclick="resetGame()">RETRY</button>
+<button id="retry" onclick="startGame()">RETRY</button>
 
 <canvas id="game" width="400" height="600"></canvas>
-
-<div id="mobile">
-<button class="mobileBtn" ontouchstart="keys.left=true" ontouchend="keys.left=false">◀</button>
-<button class="mobileBtn" ontouchstart="shooting=true" ontouchend="shooting=false">🔥</button>
-<button class="mobileBtn" ontouchstart="keys.right=true" ontouchend="keys.right=false">▶</button>
-</div>
 
 <script>
 
@@ -99,46 +77,53 @@ const ctx=canvas.getContext("2d")
 const W=canvas.width
 const H=canvas.height
 
-let keys={left:false,right:false}
-let shooting=false
+let state="title"
 
-document.addEventListener("keydown",e=>{
-if(e.key==="ArrowLeft")keys.left=true
-if(e.key==="ArrowRight")keys.right=true
-if(e.key===" ")shooting=true
-})
-
-document.addEventListener("keyup",e=>{
-if(e.key==="ArrowLeft")keys.left=false
-if(e.key==="ArrowRight")keys.right=false
-if(e.key===" ")shooting=false
-})
+let player
+let bullets=[]
+let enemies=[]
+let enemyBullets=[]
+let particles=[]
+let items=[]
+let stars=[]
+let boss=null
 
 let score=0
 let life=3
 let hiscore=localStorage.getItem("hiscore")||0
+
 document.getElementById("hiscore").textContent=hiscore
 
-let state="title"
+let keys={}
 
-let player,bullets,enemies,enemyBullets,particles,items,stars,boss
+document.addEventListener("keydown",e=>{
+keys[e.key]=true
+})
+
+document.addEventListener("keyup",e=>{
+keys[e.key]=false
+})
+
+//ゲーム開始
 
 function startGame(){
-document.getElementById("title").style.display="none"
-resetGame()
-state="game"
-}
 
-function resetGame(){
+document.getElementById("title").style.display="none"
+document.getElementById("retry").style.display="none"
+
+score=0
+life=3
+
+document.getElementById("score").textContent=0
+document.getElementById("life").textContent=3
 
 player={x:200,y:520,power:1,shield:false}
 
 bullets=[]
-enemyBullets=[]
 enemies=[]
+enemyBullets=[]
 particles=[]
 items=[]
-
 boss=null
 
 stars=[]
@@ -146,34 +131,8 @@ for(let i=0;i<120;i++){
 stars.push({x:Math.random()*W,y:Math.random()*H,s:Math.random()*2})
 }
 
-score=0
-life=3
+state="game"
 
-document.getElementById("score").textContent=score
-document.getElementById("life").textContent=life
-
-document.getElementById("retry").style.display="none"
-
-}
-
-//BGM
-
-const audio=new AudioContext()
-
-function beep(freq,duration){
-let o=audio.createOscillator()
-let g=audio.createGain()
-
-o.connect(g)
-g.connect(audio.destination)
-
-o.frequency.value=freq
-o.start()
-
-g.gain.setValueAtTime(0.1,audio.currentTime)
-g.gain.exponentialRampToValueAtTime(0.001,audio.currentTime+duration)
-
-o.stop(audio.currentTime+duration)
 }
 
 //敵生成
@@ -183,25 +142,20 @@ setInterval(()=>{
 if(state!=="game")return
 if(boss)return
 
-let type=Math.floor(Math.random()*3)
-
 enemies.push({
 
 x:Math.random()*W,
 y:-20,
-type:type,
-hp:type+1,
-cool:60
+hp:2,
+cool:80
 
 })
 
-},800)
+},900)
 
 //発射
 
 function shoot(){
-
-beep(600,0.05)
 
 if(player.power===1){
 
@@ -228,8 +182,6 @@ bullets.push({x:player.x,y:player.y,laser:true})
 //爆発
 
 function explode(x,y){
-
-beep(120,0.2)
 
 for(let i=0;i<20;i++){
 
@@ -258,14 +210,20 @@ if(state!=="game")return
 for(let s of stars){
 
 s.y+=s.s
-if(s.y>H){s.y=0;s.x=Math.random()*W}
+
+if(s.y>H){
+
+s.y=0
+s.x=Math.random()*W
+
+}
 
 }
 
 //移動
 
-if(keys.left)player.x-=5
-if(keys.right)player.x+=5
+if(keys["ArrowLeft"])player.x-=5
+if(keys["ArrowRight"])player.x+=5
 
 player.x=Math.max(10,Math.min(W-10,player.x))
 
@@ -273,13 +231,9 @@ player.x=Math.max(10,Math.min(W-10,player.x))
 
 for(let b of bullets){
 
-if(b.laser){
-
-}else{
-
+if(!b.laser){
 b.y-=8
 b.x+=b.vx
-
 }
 
 }
@@ -290,7 +244,7 @@ bullets=bullets.filter(b=>b.y>-20)
 
 for(let e of enemies){
 
-e.y+=2+e.type
+e.y+=2
 
 e.cool--
 
@@ -309,13 +263,15 @@ for(let b of enemyBullets){
 
 b.y+=4
 
-if(Math.abs(b.x-player.x)<15 && Math.abs(b.y-player.y)<15){
+if(Math.abs(b.x-player.x)<15&&Math.abs(b.y-player.y)<15){
 
 hit()
 
 }
 
 }
+
+enemyBullets=enemyBullets.filter(b=>b.y<H)
 
 //衝突
 
@@ -326,7 +282,7 @@ for(let j=bullets.length-1;j>=0;j--){
 let e=enemies[i]
 let b=bullets[j]
 
-if(Math.abs(e.x-b.x)<15 && Math.abs(e.y-b.y)<15){
+if(Math.abs(e.x-b.x)<15&&Math.abs(e.y-b.y)<15){
 
 e.hp--
 
@@ -357,21 +313,25 @@ break
 
 }
 
-//ボス
+//アイテム
 
-if(score>600 && !boss){
+for(let it of items){
 
-boss={x:200,y:100,hp:200,dir:2}
+it.y+=3
+
+if(Math.abs(it.x-player.x)<20 && Math.abs(it.y-player.y)<20){
+
+if(it.type===0)player.power=2
+if(it.type===1)player.power=3
+if(it.type===2)player.shield=true
+
+it.dead=true
 
 }
 
-if(boss){
-
-boss.x+=boss.dir
-
-if(boss.x<50||boss.x>350)boss.dir*=-1
-
 }
+
+items=items.filter(i=>!i.dead && i.y<H)
 
 //パーティクル
 
@@ -384,6 +344,40 @@ p.life--
 }
 
 particles=particles.filter(p=>p.life>0)
+
+//ボス出現
+
+if(score>500 && !boss){
+
+boss={x:200,y:100,hp:150,dir:2}
+
+}
+
+if(boss){
+
+boss.x+=boss.dir
+
+if(boss.x<50||boss.x>350)boss.dir*=-1
+
+for(let b of bullets){
+
+if(Math.abs(b.x-boss.x)<60 && Math.abs(b.y-boss.y)<40){
+
+boss.hp--
+
+}
+
+}
+
+if(boss.hp<=0){
+
+explode(boss.x,boss.y)
+boss=null
+score+=500
+
+}
+
+}
 
 }
 
@@ -404,15 +398,9 @@ document.getElementById("life").textContent=life
 
 if(life<=0){
 
-gameover()
-
-}
-
-}
-
-function gameover(){
-
 state="gameover"
+
+document.getElementById("retry").style.display="block"
 
 if(score>hiscore){
 
@@ -422,7 +410,7 @@ document.getElementById("hiscore").textContent=hiscore
 
 }
 
-document.getElementById("retry").style.display="block"
+}
 
 }
 
@@ -456,6 +444,7 @@ ctx.fill()
 if(player.shield){
 
 ctx.strokeStyle="blue"
+
 ctx.beginPath()
 ctx.arc(player.x,player.y,30,0,Math.PI*2)
 ctx.stroke()
@@ -549,7 +538,7 @@ draw()
 
 shootTimer++
 
-if(shooting && shootTimer>10){
+if(keys[" "] && shootTimer>10 && state==="game"){
 
 shoot()
 shootTimer=0

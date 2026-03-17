@@ -11,6 +11,7 @@ margin:0;
 background:black;
 overflow:hidden;
 font-family:sans-serif;
+text-align:center;
 }
 
 #game{
@@ -27,16 +28,28 @@ color:white;
 font-size:20px;
 }
 
+#retry{
+position:absolute;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+padding:15px 40px;
+font-size:20px;
+display:none;
+cursor:pointer;
+}
+
 </style>
 </head>
 
 <body>
 
 <div id="ui">
-SCORE : <span id="score">0</span>
-<br>
+SCORE : <span id="score">0</span><br>
 LIFE : <span id="life">3</span>
 </div>
+
+<button id="retry">RETRY</button>
 
 <canvas id="game" width="400" height="600"></canvas>
 
@@ -49,19 +62,25 @@ const WIDTH=canvas.width
 const HEIGHT=canvas.height
 
 let keys={}
-
 document.addEventListener("keydown",e=>keys[e.key]=true)
 document.addEventListener("keyup",e=>keys[e.key]=false)
 
-let score=0
-let life=3
-let gameover=false
+const retryBtn=document.getElementById("retry")
 
-//================
-// プレイヤー
-//================
+retryBtn.onclick=resetGame
 
-let player={
+let player
+let bullets
+let enemies
+let explosions
+let items
+let score
+let life
+let gameover
+
+function resetGame(){
+
+player={
 x:WIDTH/2,
 y:HEIGHT-60,
 speed:6,
@@ -69,35 +88,29 @@ power:1,
 powerTimer:0
 }
 
-//================
-// 弾
-//================
+bullets=[]
+enemies=[]
+explosions=[]
+items=[]
 
-let bullets=[]
+score=0
+life=3
+gameover=false
 
-//================
-// 敵
-//================
+document.getElementById("score").textContent=0
+document.getElementById("life").textContent=3
 
-let enemies=[]
+retryBtn.style.display="none"
 
-//================
-// 爆発
-//================
+}
 
-let explosions=[]
+resetGame()
 
-//================
-// アイテム
-//================
-
-let items=[]
-
-//================
-// 敵生成
-//================
+//敵生成
 
 function spawnEnemy(){
+
+if(gameover)return
 
 enemies.push({
 x:Math.random()*WIDTH,
@@ -109,9 +122,7 @@ speed:2+Math.random()*2
 
 setInterval(spawnEnemy,1000)
 
-//================
-// 発射
-//================
+//発射
 
 function shoot(){
 
@@ -131,9 +142,7 @@ bullets.push({x:player.x,y:player.y,vx:2})
 
 }
 
-//================
-// 爆発生成
-//================
+//爆発
 
 function createExplosion(x,y){
 
@@ -146,15 +155,11 @@ life:20
 
 }
 
-//================
-// 更新
-//================
+//更新
 
 function update(){
 
 if(gameover)return
-
-//移動
 
 if(keys["ArrowLeft"]) player.x-=player.speed
 if(keys["ArrowRight"]) player.x+=player.speed
@@ -179,6 +184,13 @@ for(let e of enemies){
 
 e.y+=e.speed
 
+if(Math.abs(e.x-player.x)<20 && Math.abs(e.y-player.y)<20){
+
+gameover=true
+retryBtn.style.display="block"
+
+}
+
 }
 
 //爆発
@@ -202,7 +214,6 @@ if(Math.abs(it.x-player.x)<20 && Math.abs(it.y-player.y)<20){
 
 player.power=2
 player.powerTimer=600
-
 it.dead=true
 
 }
@@ -225,32 +236,7 @@ player.power=1
 
 }
 
-//敵削除
-
-for(let i=enemies.length-1;i>=0;i--){
-
-let e=enemies[i]
-
-if(e.y>HEIGHT){
-
-enemies.splice(i,1)
-
-life--
-
-document.getElementById("life").textContent=life
-
-if(life<=0){
-
-gameover=true
-alert("GAME OVER")
-
-}
-
-}
-
-}
-
-//衝突判定
+//衝突
 
 for(let i=enemies.length-1;i>=0;i--){
 
@@ -285,19 +271,23 @@ break
 
 }
 
-//================
-// 描画
-//================
+//描画
 
 function draw(){
 
 ctx.fillStyle="black"
 ctx.fillRect(0,0,WIDTH,HEIGHT)
 
-//プレイヤー
+//プレイヤー（宇宙船）
 
 ctx.fillStyle="cyan"
-ctx.fillRect(player.x-15,player.y-15,30,30)
+
+ctx.beginPath()
+ctx.moveTo(player.x,player.y-20)
+ctx.lineTo(player.x-15,player.y+20)
+ctx.lineTo(player.x+15,player.y+20)
+ctx.closePath()
+ctx.fill()
 
 //弾
 
@@ -305,17 +295,26 @@ ctx.fillStyle="yellow"
 
 for(let b of bullets){
 
-ctx.fillRect(b.x-3,b.y-10,6,10)
+ctx.fillRect(b.x-2,b.y-10,4,10)
 
 }
 
-//敵
+//敵（六角形）
 
 ctx.fillStyle="red"
 
 for(let e of enemies){
 
-ctx.fillRect(e.x-15,e.y-15,30,30)
+ctx.beginPath()
+
+ctx.moveTo(e.x,e.y-15)
+ctx.lineTo(e.x-15,e.y)
+ctx.lineTo(e.x-10,e.y+15)
+ctx.lineTo(e.x+10,e.y+15)
+ctx.lineTo(e.x+15,e.y)
+ctx.closePath()
+
+ctx.fill()
 
 }
 
@@ -323,30 +322,47 @@ ctx.fillRect(e.x-15,e.y-15,30,30)
 
 for(let ex of explosions){
 
+let g=ctx.createRadialGradient(ex.x,ex.y,0,ex.x,ex.y,ex.r)
+
+g.addColorStop(0,"yellow")
+g.addColorStop(0.5,"orange")
+g.addColorStop(1,"red")
+
+ctx.fillStyle=g
+
 ctx.beginPath()
 ctx.arc(ex.x,ex.y,ex.r,0,Math.PI*2)
-ctx.fillStyle="orange"
 ctx.fill()
 
 }
 
-//アイテム
+//アイテム（星）
 
 ctx.fillStyle="lime"
 
 for(let it of items){
 
 ctx.beginPath()
-ctx.arc(it.x,it.y,8,0,Math.PI*2)
+
+for(let i=0;i<5;i++){
+
+let angle=i*2*Math.PI/5
+
+ctx.lineTo(
+it.x+Math.cos(angle)*10,
+it.y+Math.sin(angle)*10
+)
+
+}
+
+ctx.closePath()
 ctx.fill()
 
 }
 
 }
 
-//================
-// 連射制御
-//================
+//連射
 
 let shootTimer=0
 
@@ -371,5 +387,6 @@ requestAnimationFrame(gameLoop)
 gameLoop()
 
 </script>
+
 </body>
 </html>

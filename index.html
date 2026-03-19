@@ -2,556 +2,187 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Space Shooter</title>
-
+<title>落ちゲーパズル</title>
 <style>
-
-body{
-margin:0;
-background:black;
-overflow:hidden;
-font-family:sans-serif;
-color:white;
-text-align:center;
+body {
+  background: #111;
+  color: white;
+  text-align: center;
+  font-family: sans-serif;
 }
-
-#game{
-display:block;
-margin:auto;
-background:black;
+canvas {
+  background: #000;
+  display: block;
+  margin: 20px auto;
+  border: 2px solid #fff;
 }
-
-#ui{
-position:absolute;
-top:10px;
-left:10px;
-font-size:16px;
-}
-
-#title{
-position:absolute;
-top:40%;
-left:50%;
-transform:translate(-50%,-50%);
-}
-
-button{
-padding:12px 30px;
-font-size:20px;
-cursor:pointer;
-}
-
-#retry{
-position:absolute;
-top:60%;
-left:50%;
-transform:translate(-50%,-50%);
-display:none;
-}
-
 </style>
 </head>
-
 <body>
-
-<div id="ui">
-SCORE <span id="score">0</span><br>
-LIFE <span id="life">3</span><br>
-HI <span id="hiscore">0</span>
-</div>
-
-<div id="title">
-<h1>SPACE SHOOTER</h1>
-<button onclick="startGame()">START</button>
-</div>
-
-<button id="retry" onclick="startGame()">RETRY</button>
-
-<canvas id="game" width="400" height="600"></canvas>
+<h1>落ちゲーパズル</h1>
+<p>← → 移動 / ↑ 回転 / ↓ 加速</p>
+<canvas id="game" width="240" height="480"></canvas>
 
 <script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
 
-const canvas=document.getElementById("game")
-const ctx=canvas.getContext("2d")
+const COLS = 6;
+const ROWS = 12;
+const SIZE = 40;
 
-const W=canvas.width
-const H=canvas.height
+const COLORS = ["red", "blue", "green", "yellow", "purple"];
 
-let state="title"
+let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
 
-let player
-let bullets=[]
-let enemies=[]
-let enemyBullets=[]
-let particles=[]
-let items=[]
-let stars=[]
-let boss=null
+let piece = null;
 
-let score=0
-let life=3
-let hiscore=localStorage.getItem("hiscore")||0
-
-document.getElementById("hiscore").textContent=hiscore
-
-let keys={}
-
-document.addEventListener("keydown",e=>{
-keys[e.key]=true
-})
-
-document.addEventListener("keyup",e=>{
-keys[e.key]=false
-})
-
-//ゲーム開始
-
-function startGame(){
-
-document.getElementById("title").style.display="none"
-document.getElementById("retry").style.display="none"
-
-score=0
-life=3
-
-document.getElementById("score").textContent=0
-document.getElementById("life").textContent=3
-
-player={x:200,y:520,power:1,shield:false}
-
-bullets=[]
-enemies=[]
-enemyBullets=[]
-particles=[]
-items=[]
-boss=null
-
-stars=[]
-for(let i=0;i<120;i++){
-stars.push({x:Math.random()*W,y:Math.random()*H,s:Math.random()*2})
+function newPiece() {
+  const c1 = COLORS[Math.floor(Math.random() * COLORS.length)];
+  const c2 = COLORS[Math.floor(Math.random() * COLORS.length)];
+  return {
+    x: 2,
+    y: 0,
+    blocks: [[0,0,c1],[0,1,c2]], // 縦
+    rotation: 0
+  };
 }
 
-state="game"
-
+function drawBlock(x,y,color){
+  ctx.fillStyle = color;
+  ctx.fillRect(x*SIZE,y*SIZE,SIZE,SIZE);
+  ctx.strokeStyle = "black";
+  ctx.strokeRect(x*SIZE,y*SIZE,SIZE,SIZE);
 }
-
-//敵生成
-
-setInterval(()=>{
-
-if(state!=="game")return
-if(boss)return
-
-enemies.push({
-
-x:Math.random()*W,
-y:-20,
-hp:2,
-cool:80
-
-})
-
-},900)
-
-//発射
-
-function shoot(){
-
-if(player.power===1){
-
-bullets.push({x:player.x,y:player.y,vx:0})
-
-}
-
-if(player.power===2){
-
-bullets.push({x:player.x,y:player.y,vx:-2})
-bullets.push({x:player.x,y:player.y,vx:0})
-bullets.push({x:player.x,y:player.y,vx:2})
-
-}
-
-if(player.power===3){
-
-bullets.push({x:player.x,y:player.y,laser:true})
-
-}
-
-}
-
-//爆発
-
-function explode(x,y){
-
-for(let i=0;i<20;i++){
-
-particles.push({
-
-x:x,
-y:y,
-vx:(Math.random()-0.5)*4,
-vy:(Math.random()-0.5)*4,
-life:30
-
-})
-
-}
-
-}
-
-//更新
-
-function update(){
-
-if(state!=="game")return
-
-//星
-
-for(let s of stars){
-
-s.y+=s.s
-
-if(s.y>H){
-
-s.y=0
-s.x=Math.random()*W
-
-}
-
-}
-
-//移動
-
-if(keys["ArrowLeft"])player.x-=5
-if(keys["ArrowRight"])player.x+=5
-
-player.x=Math.max(10,Math.min(W-10,player.x))
-
-//弾
-
-for(let b of bullets){
-
-if(!b.laser){
-b.y-=8
-b.x+=b.vx
-}
-
-}
-
-bullets=bullets.filter(b=>b.y>-20)
-
-//敵
-
-for(let e of enemies){
-
-e.y+=2
-
-e.cool--
-
-if(e.cool<0){
-
-enemyBullets.push({x:e.x,y:e.y})
-e.cool=100
-
-}
-
-}
-
-//敵弾
-
-for(let b of enemyBullets){
-
-b.y+=4
-
-if(Math.abs(b.x-player.x)<15&&Math.abs(b.y-player.y)<15){
-
-hit()
-
-}
-
-}
-
-enemyBullets=enemyBullets.filter(b=>b.y<H)
-
-//衝突
-
-for(let i=enemies.length-1;i>=0;i--){
-
-for(let j=bullets.length-1;j>=0;j--){
-
-let e=enemies[i]
-let b=bullets[j]
-
-if(Math.abs(e.x-b.x)<15&&Math.abs(e.y-b.y)<15){
-
-e.hp--
-
-if(!b.laser)bullets.splice(j,1)
-
-if(e.hp<=0){
-
-explode(e.x,e.y)
-
-if(Math.random()<0.3){
-
-items.push({x:e.x,y:e.y,type:Math.floor(Math.random()*3)})
-
-}
-
-enemies.splice(i,1)
-
-score+=10
-document.getElementById("score").textContent=score
-
-}
-
-break
-
-}
-
-}
-
-}
-
-//アイテム
-
-for(let it of items){
-
-it.y+=3
-
-if(Math.abs(it.x-player.x)<20 && Math.abs(it.y-player.y)<20){
-
-if(it.type===0)player.power=2
-if(it.type===1)player.power=3
-if(it.type===2)player.shield=true
-
-it.dead=true
-
-}
-
-}
-
-items=items.filter(i=>!i.dead && i.y<H)
-
-//パーティクル
-
-for(let p of particles){
-
-p.x+=p.vx
-p.y+=p.vy
-p.life--
-
-}
-
-particles=particles.filter(p=>p.life>0)
-
-//ボス出現
-
-if(score>500 && !boss){
-
-boss={x:200,y:100,hp:150,dir:2}
-
-}
-
-if(boss){
-
-boss.x+=boss.dir
-
-if(boss.x<50||boss.x>350)boss.dir*=-1
-
-for(let b of bullets){
-
-if(Math.abs(b.x-boss.x)<60 && Math.abs(b.y-boss.y)<40){
-
-boss.hp--
-
-}
-
-}
-
-if(boss.hp<=0){
-
-explode(boss.x,boss.y)
-boss=null
-score+=500
-
-}
-
-}
-
-}
-
-//被弾
-
-function hit(){
-
-if(player.shield){
-
-player.shield=false
-return
-
-}
-
-life--
-
-document.getElementById("life").textContent=life
-
-if(life<=0){
-
-state="gameover"
-
-document.getElementById("retry").style.display="block"
-
-if(score>hiscore){
-
-hiscore=score
-localStorage.setItem("hiscore",hiscore)
-document.getElementById("hiscore").textContent=hiscore
-
-}
-
-}
-
-}
-
-//描画
 
 function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-ctx.fillStyle="black"
-ctx.fillRect(0,0,W,H)
+  for(let y=0;y<ROWS;y++){
+    for(let x=0;x<COLS;x++){
+      if(board[y][x]) drawBlock(x,y,board[y][x]);
+    }
+  }
 
-//星
-
-ctx.fillStyle="white"
-
-for(let s of stars){
-
-ctx.fillRect(s.x,s.y,s.s,s.s)
-
+  if(piece){
+    piece.blocks.forEach(b=>{
+      drawBlock(piece.x+b[0], piece.y+b[1], b[2]);
+    });
+  }
 }
 
-//プレイヤー
-
-ctx.fillStyle="cyan"
-
-ctx.beginPath()
-ctx.moveTo(player.x,player.y-20)
-ctx.lineTo(player.x-15,player.y+20)
-ctx.lineTo(player.x+15,player.y+20)
-ctx.fill()
-
-if(player.shield){
-
-ctx.strokeStyle="blue"
-
-ctx.beginPath()
-ctx.arc(player.x,player.y,30,0,Math.PI*2)
-ctx.stroke()
-
+function collide(px,py,blocks){
+  return blocks.some(b=>{
+    let x = px + b[0];
+    let y = py + b[1];
+    return x<0 || x>=COLS || y>=ROWS || (y>=0 && board[y][x]);
+  });
 }
 
-//弾
-
-ctx.fillStyle="yellow"
-
-for(let b of bullets){
-
-if(b.laser){
-
-ctx.fillRect(b.x-2,0,4,b.y)
-
-}else{
-
-ctx.fillRect(b.x-2,b.y-10,4,10)
-
+function merge(){
+  piece.blocks.forEach(b=>{
+    let x = piece.x + b[0];
+    let y = piece.y + b[1];
+    if(y>=0) board[y][x] = b[2];
+  });
 }
 
+function rotate(){
+  const rotated = piece.blocks.map(b=>[-b[1], b[0], b[2]]);
+  if(!collide(piece.x, piece.y, rotated)){
+    piece.blocks = rotated;
+  }
 }
 
-//敵
+function clearMatches(){
+  let visited = Array.from({length: ROWS},()=>Array(COLS).fill(false));
+  let toClear = [];
 
-ctx.fillStyle="red"
+  function dfs(x,y,color,group){
+    if(x<0||x>=COLS||y<0||y>=ROWS) return;
+    if(visited[y][x] || board[y][x] !== color) return;
+    visited[y][x]=true;
+    group.push([x,y]);
+    dfs(x+1,y,color,group);
+    dfs(x-1,y,color,group);
+    dfs(x,y+1,color,group);
+    dfs(x,y-1,color,group);
+  }
 
-for(let e of enemies){
+  for(let y=0;y<ROWS;y++){
+    for(let x=0;x<COLS;x++){
+      if(board[y][x] && !visited[y][x]){
+        let group=[];
+        dfs(x,y,board[y][x],group);
+        if(group.length>=4) toClear.push(...group);
+      }
+    }
+  }
 
-ctx.fillRect(e.x-12,e.y-12,24,24)
+  toClear.forEach(([x,y])=>board[y][x]=null);
 
+  return toClear.length>0;
 }
 
-//敵弾
-
-ctx.fillStyle="orange"
-
-for(let b of enemyBullets){
-
-ctx.beginPath()
-ctx.arc(b.x,b.y,4,0,Math.PI*2)
-ctx.fill()
-
+function drop(){
+  for(let x=0;x<COLS;x++){
+    for(let y=ROWS-1;y>=0;y--){
+      if(!board[y][x]){
+        for(let k=y-1;k>=0;k--){
+          if(board[k][x]){
+            board[y][x]=board[k][x];
+            board[k][x]=null;
+            break;
+          }
+        }
+      }
+    }
+  }
 }
 
-//ボス
+function update(){
+  if(!piece) piece = newPiece();
 
-if(boss){
+  if(!collide(piece.x, piece.y+1, piece.blocks)){
+    piece.y++;
+  } else {
+    merge();
+    while(true){
+      if(clearMatches()){
+        drop();
+      } else break;
+    }
+    piece = newPiece();
 
-ctx.fillStyle="purple"
-ctx.fillRect(boss.x-60,boss.y-40,120,80)
+    if(collide(piece.x, piece.y, piece.blocks)){
+      alert("ゲームオーバー");
+      board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+    }
+  }
 
-ctx.fillStyle="white"
-ctx.fillRect(boss.x-60,boss.y-60,boss.hp/2,8)
-
+  draw();
 }
 
-//爆発
+setInterval(update, 500);
 
-ctx.fillStyle="orange"
+window.addEventListener('keydown', e=>{
+  if(!piece) return;
 
-for(let p of particles){
+  if(e.key === 'ArrowLeft'){
+    if(!collide(piece.x-1,piece.y,piece.blocks)) piece.x--;
+  }
+  if(e.key === 'ArrowRight'){
+    if(!collide(piece.x+1,piece.y,piece.blocks)) piece.x++;
+  }
+  if(e.key === 'ArrowDown'){
+    if(!collide(piece.x,piece.y+1,piece.blocks)) piece.y++;
+  }
+  if(e.key === 'ArrowUp'){
+    rotate();
+  }
 
-ctx.fillRect(p.x,p.y,3,3)
-
-}
-
-//アイテム
-
-for(let it of items){
-
-ctx.fillStyle=["lime","cyan","blue"][it.type]
-
-ctx.beginPath()
-ctx.arc(it.x,it.y,8,0,Math.PI*2)
-ctx.fill()
-
-}
-
-}
-
-//ゲームループ
-
-let shootTimer=0
-
-function loop(){
-
-update()
-draw()
-
-shootTimer++
-
-if(keys[" "] && shootTimer>10 && state==="game"){
-
-shoot()
-shootTimer=0
-
-}
-
-requestAnimationFrame(loop)
-
-}
-
-loop()
-
+  draw();
+});
 </script>
-
 </body>
 </html>

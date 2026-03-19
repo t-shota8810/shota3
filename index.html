@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>落ちゲーパズル</title>
+<title>落ちゲーパズル（スコア・連鎖付き）</title>
 <style>
 body {
   background: #111;
@@ -16,12 +16,14 @@ canvas {
   margin: 20px auto;
   border: 2px solid #fff;
 }
+#info { margin-top: 10px; }
 </style>
 </head>
 <body>
 <h1>落ちゲーパズル</h1>
 <p>← → 移動 / ↑ 回転 / ↓ 加速</p>
 <canvas id="game" width="240" height="480"></canvas>
+<div id="info">スコア: <span id="score">0</span> / 連鎖: <span id="combo">0</span></div>
 
 <script>
 const canvas = document.getElementById('game');
@@ -34,8 +36,15 @@ const SIZE = 40;
 const COLORS = ["red", "blue", "green", "yellow", "purple"];
 
 let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
-
 let piece = null;
+
+let score = 0;
+let combo = 0;
+
+function updateUI(){
+  document.getElementById('score').textContent = score;
+  document.getElementById('combo').textContent = combo;
+}
 
 function newPiece() {
   const c1 = COLORS[Math.floor(Math.random() * COLORS.length)];
@@ -43,8 +52,7 @@ function newPiece() {
   return {
     x: 2,
     y: 0,
-    blocks: [[0,0,c1],[0,1,c2]], // 縦
-    rotation: 0
+    blocks: [[0,0,c1],[0,1,c2]]
   };
 }
 
@@ -121,10 +129,16 @@ function clearMatches(){
 
   toClear.forEach(([x,y])=>board[y][x]=null);
 
+  if(toClear.length>0){
+    // スコア加算（連鎖倍率）
+    score += toClear.length * 10 * (combo+1);
+  }
+
   return toClear.length>0;
 }
 
 function drop(){
+  let moved = false;
   for(let x=0;x<COLS;x++){
     for(let y=ROWS-1;y>=0;y--){
       if(!board[y][x]){
@@ -132,12 +146,36 @@ function drop(){
           if(board[k][x]){
             board[y][x]=board[k][x];
             board[k][x]=null;
+            moved = true;
             break;
           }
         }
       }
     }
   }
+  return moved;
+}
+
+function applyGravityFully(){
+  while(drop()){}
+}
+
+function resolveChains(){
+  combo = 0;
+  let chainOccurred = false;
+
+  while(true){
+    applyGravityFully();
+    if(clearMatches()){
+      combo++;
+      chainOccurred = true;
+    } else {
+      break;
+    }
+  }
+
+  if(!chainOccurred) combo = 0;
+  updateUI();
 }
 
 function update(){
@@ -147,16 +185,15 @@ function update(){
     piece.y++;
   } else {
     merge();
-    while(true){
-      if(clearMatches()){
-        drop();
-      } else break;
-    }
+    resolveChains();
     piece = newPiece();
 
     if(collide(piece.x, piece.y, piece.blocks)){
-      alert("ゲームオーバー");
+      alert("ゲームオーバー\nスコア: " + score);
       board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+      score = 0;
+      combo = 0;
+      updateUI();
     }
   }
 
